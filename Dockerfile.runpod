@@ -1,0 +1,37 @@
+FROM pytorch/pytorch:2.7.0-cuda12.6-cudnn9-devel
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    PORT=8000 \
+    SAM3_DEVICE=cuda \
+    SAM3_LOAD_FROM_HF=1 \
+    SAM3_COMPILE=0 \
+    HF_HOME=/workspace/.cache/huggingface \
+    HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface/hub
+
+LABEL org.opencontainers.image.source="https://github.com/chrhansen/sam3-video-prototype" \
+      org.opencontainers.image.description="SAM3 Video skier track prototype for RunPod"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libgl1 libglib2.0-0 \
+    git build-essential ninja-build \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+
+RUN python -m pip install --upgrade pip setuptools wheel && \
+    python -m pip install --index-url https://download.pytorch.org/whl/cu126 torchvision==0.22.0 && \
+    python -m pip install -r /tmp/requirements.txt
+
+COPY . /app
+
+EXPOSE 8000
+
+CMD ["bash", "-lc", "mkdir -p ${HF_HOME} /workspace/sam3-video && uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]

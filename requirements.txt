@@ -1,0 +1,10 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+python-multipart>=0.0.9
+numpy>=1.26,<2
+opencv-python-headless>=4.10.0
+Pillow>=10.4.0
+pycocotools>=2.0.8
+psutil>=5.9.0
+https://github.com/facebookresearch/sam3/archive/86ed77094094e5cabb16b0414ec60c5ba9ce0a0f.tar.gz

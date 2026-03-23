@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+runs/
+.runpod_pod_id
+.DS_Store
+.env
+
+# local test media
+*.mp4
+*.mov
+*.mkv
+*.avi
