@@ -101,5 +101,40 @@ class PredictorInitTest(unittest.TestCase):
                 pipeline._get_predictor(settings)
 
 
+class ClickSessionPrepTest(unittest.TestCase):
+    def test_prime_click_prompt_session_seeds_empty_cache_for_all_frames(self) -> None:
+        predictor = ModuleType("fake_predictor")
+        predictor._ALL_INFERENCE_STATES = {
+            "session-1": {
+                "state": {
+                    "cached_frame_outputs": {2: {"keep": True}},
+                }
+            }
+        }
+
+        pipeline._prime_click_prompt_session(predictor, "session-1", 4)
+
+        cached = predictor._ALL_INFERENCE_STATES["session-1"]["state"]["cached_frame_outputs"]
+        self.assertEqual(sorted(cached.keys()), [0, 1, 2, 3])
+        self.assertEqual(cached[2], {"keep": True})
+        self.assertEqual(cached[0], {})
+
+    def test_mark_session_frame_has_outputs_sets_flag(self) -> None:
+        predictor = ModuleType("fake_predictor")
+        predictor._ALL_INFERENCE_STATES = {
+            "session-1": {
+                "state": {
+                    "previous_stages_out": [None, None, None],
+                }
+            }
+        }
+
+        pipeline._mark_session_frame_has_outputs(predictor, "session-1", 1)
+
+        previous = predictor._ALL_INFERENCE_STATES["session-1"]["state"]["previous_stages_out"]
+        self.assertIsNone(previous[0])
+        self.assertEqual(previous[1], "_THIS_FRAME_HAS_OUTPUTS_")
+
+
 if __name__ == "__main__":
     unittest.main()

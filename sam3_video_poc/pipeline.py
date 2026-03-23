@@ -197,6 +197,40 @@ def _predictor_gpu_name() -> str:
     return torch.cuda.get_device_name(torch.cuda.current_device())
 
 
+def _prime_click_prompt_session(predictor: object, session_id: str, num_frames: int) -> None:
+    sessions = getattr(predictor, "_ALL_INFERENCE_STATES", None)
+    if not isinstance(sessions, dict):
+        return
+    session = sessions.get(session_id)
+    if not isinstance(session, dict):
+        return
+    inference_state = session.get("state")
+    if not isinstance(inference_state, dict):
+        return
+    cached_outputs = inference_state.setdefault("cached_frame_outputs", {})
+    if not isinstance(cached_outputs, dict):
+        return
+    for frame_idx in range(num_frames):
+        cached_outputs.setdefault(frame_idx, {})
+
+
+def _mark_session_frame_has_outputs(predictor: object, session_id: str, frame_idx: int) -> None:
+    sessions = getattr(predictor, "_ALL_INFERENCE_STATES", None)
+    if not isinstance(sessions, dict):
+        return
+    session = sessions.get(session_id)
+    if not isinstance(session, dict):
+        return
+    inference_state = session.get("state")
+    if not isinstance(inference_state, dict):
+        return
+    previous_stages_out = inference_state.get("previous_stages_out")
+    if not isinstance(previous_stages_out, list):
+        return
+    if 0 <= frame_idx < len(previous_stages_out):
+        previous_stages_out[frame_idx] = "_THIS_FRAME_HAS_OUTPUTS_"
+
+
 def run_sam3_video_track(
     *,
     settings: Settings,
@@ -282,6 +316,8 @@ def run_sam3_video_track(
             session_id,
             time.perf_counter() - stage_start,
         )
+        if prompt.mode == "click":
+            _prime_click_prompt_session(predictor, session_id, num_frames)
 
         stage_start = time.perf_counter()
         progress_cb(0.30, "adding prompt")
@@ -314,6 +350,7 @@ def run_sam3_video_track(
         prompt_frame_idx = int(prompt_response["frame_index"])
         prompt_outputs = prompt_response["outputs"]
         outputs_per_frame[prompt_frame_idx] = prompt_outputs
+        _mark_session_frame_has_outputs(predictor, session_id, prompt_frame_idx)
         logger.info(
             "[sam3-video][%s] prompt added frame=%d in %.2fs",
             job_ref,
@@ -329,6 +366,7 @@ def run_sam3_video_track(
                 "type": "propagate_in_video",
                 "session_id": session_id,
                 "propagation_direction": "forward",
+                "start_frame_index": prompt_frame_idx,
             }
         ):
             frame_idx = int(response["frame_index"])
