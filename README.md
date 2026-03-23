@@ -49,7 +49,7 @@ source .venv/bin/activate
 2. Install PyTorch + torchvision for CUDA 12.6:
 
 ```bash
-pip install --upgrade pip setuptools wheel
+pip install --upgrade pip "setuptools<82" wheel
 pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.7.0 torchvision==0.22.0
 ```
 
@@ -170,3 +170,4 @@ Published tags:
 - Official SAM3 Video predictor loads large weights. First prompt on a cold pod will take time.
 - `SAM3_COMPILE=1` exists but left off by default. Compile cost is not prototype-friendly.
 - If RunPod image pull or gated checkpoint download fails, verify `HF_TOKEN` scope/access first.
+- If `SAM3_LOAD_FROM_HF=0`, also set `SAM3_CHECKPOINT_PATH` to a local checkpoint file.

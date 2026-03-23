@@ -59,8 +59,17 @@ def _require_cuda(settings: Settings) -> None:
         raise RuntimeError("CUDA GPU required for SAM3 Video, but torch.cuda.is_available() is false")
 
 
+def _resolve_predictor_checkpoint_path(settings: Settings) -> str | None:
+    if settings.sam3_checkpoint_path:
+        return str(settings.sam3_checkpoint_path)
+    if settings.sam3_load_from_hf:
+        return None
+    raise RuntimeError("SAM3_CHECKPOINT_PATH required when SAM3_LOAD_FROM_HF=0")
+
+
 def _get_predictor(settings: Settings):
     _require_cuda(settings)
+    checkpoint_path = _resolve_predictor_checkpoint_path(settings)
     checkpoint_key = str(settings.sam3_checkpoint_path or "")
     key = (
         checkpoint_key,
@@ -80,10 +89,7 @@ def _get_predictor(settings: Settings):
             ) from exc
 
         predictor = build_sam3_video_predictor(
-            checkpoint_path=str(settings.sam3_checkpoint_path)
-            if settings.sam3_checkpoint_path
-            else None,
-            load_from_HF=settings.sam3_load_from_hf,
+            checkpoint_path=checkpoint_path,
             apply_temporal_disambiguation=settings.sam3_apply_temporal_disambiguation,
             compile=settings.sam3_compile,
         )
