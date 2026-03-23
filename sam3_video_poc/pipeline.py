@@ -283,21 +283,21 @@ def run_sam3_video_track(
         num_frames=num_frames,
     )
 
-    stage_start = time.perf_counter()
-    progress_cb(0.16, "loading sam3 video")
-    predictor = _get_predictor(settings)
-    logger.info(
-        "[sam3-video][%s] predictor ready in %.2fs gpu=%s",
-        job_ref,
-        time.perf_counter() - stage_start,
-        _predictor_gpu_name(),
-    )
-
     session_id: str | None = None
     predictor = None
     outputs_per_frame: dict[int, dict[str, object]] = {}
 
     try:
+        stage_start = time.perf_counter()
+        progress_cb(0.16, "loading sam3 video")
+        predictor = _get_predictor(settings)
+        logger.info(
+            "[sam3-video][%s] predictor ready in %.2fs gpu=%s",
+            job_ref,
+            time.perf_counter() - stage_start,
+            _predictor_gpu_name(),
+        )
+
         stage_start = time.perf_counter()
         progress_cb(0.24, "starting session")
         session_response = predictor.handle_request(

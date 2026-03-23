@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType
@@ -161,6 +162,90 @@ class ClickSessionPrepTest(unittest.TestCase):
         previous = predictor._ALL_INFERENCE_STATES["session-1"]["state"]["previous_stages_out"]
         self.assertIsNone(previous[0])
         self.assertEqual(previous[1], "_THIS_FRAME_HAS_OUTPUTS_")
+
+
+class RunTrackFlowTest(unittest.TestCase):
+    def test_run_track_uses_predictor_instance(self) -> None:
+        settings = Settings(
+            runs_dir=Path("/tmp/sam3-video-tests"),
+            sam3_device="cuda",
+            sam3_checkpoint_path=None,
+            sam3_load_from_hf=True,
+            sam3_compile=False,
+            sam3_apply_temporal_disambiguation=True,
+        )
+
+        class FakePredictor:
+            def __init__(self) -> None:
+                self.request_types: list[str] = []
+                self.closed_session_id: str | None = None
+
+            def handle_request(self, request):
+                self.request_types.append(request["type"])
+                if request["type"] == "start_session":
+                    return {"session_id": "session-1"}
+                if request["type"] == "add_prompt":
+                    return {"frame_index": 0, "outputs": {"out_obj_ids": [], "out_binary_masks": []}}
+                if request["type"] == "close_session":
+                    self.closed_session_id = request["session_id"]
+                    return {"is_success": True}
+                raise AssertionError(f"unexpected request: {request}")
+
+            def handle_stream_request(self, request):
+                self.request_types.append(request["type"])
+                if False:
+                    yield request
+                return
+
+        class FakeWriter:
+            def write(self, frame) -> None:
+                _ = frame
+
+            def release(self) -> None:
+                return None
+
+        predictor = FakePredictor()
+
+        def fake_extract_frame0(video_path: Path, frame0_path: Path) -> tuple[int, int]:
+            _ = video_path
+            frame0_path.parent.mkdir(parents=True, exist_ok=True)
+            frame0_path.write_bytes(b"frame0")
+            return (640, 480)
+
+        def fake_decode_frames(video_path: Path, frames_dir: Path) -> tuple[int, int, float, int]:
+            _ = video_path
+            frames_dir.mkdir(parents=True, exist_ok=True)
+            (frames_dir / "000000.jpg").write_bytes(b"frame")
+            return (640, 480, 30.0, 1)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            video_path = Path(tmpdir) / "input.mp4"
+            video_path.write_bytes(b"video")
+
+            with patch.object(pipeline, "extract_frame0", side_effect=fake_extract_frame0):
+                with patch.object(pipeline, "decode_frames", side_effect=fake_decode_frames):
+                    with patch.object(pipeline, "_get_predictor", return_value=predictor):
+                        with patch.object(pipeline, "_predictor_gpu_name", return_value="fake-gpu"):
+                            with patch.object(pipeline, "_mask_for_obj", return_value=None):
+                                with patch.object(pipeline, "_overlay_frame", side_effect=lambda frame, mask: frame):
+                                    with patch.object(pipeline.cv2, "VideoWriter", return_value=FakeWriter(), create=True):
+                                        with patch.object(pipeline.cv2, "VideoWriter_fourcc", return_value=0, create=True):
+                                            with patch.object(pipeline.cv2, "IMREAD_COLOR", 1, create=True):
+                                                with patch.object(pipeline.cv2, "imread", return_value=object(), create=True):
+                                                    pipeline.run_sam3_video_track(
+                                                        settings=settings,
+                                                        video_path=video_path,
+                                                        source_filename="input.mp4",
+                                                        run_dir=run_dir,
+                                                        prompt=pipeline.PromptSpec(mode="click", click_xy=(10, 10)),
+                                                        progress_cb=lambda progress, message: None,
+                                                    )
+
+        self.assertEqual(predictor.request_types[0], "start_session")
+        self.assertIn("add_prompt", predictor.request_types)
+        self.assertIn("propagate_in_video", predictor.request_types)
+        self.assertEqual(predictor.closed_session_id, "session-1")
 
 
 if __name__ == "__main__":
