@@ -100,6 +100,33 @@ class PredictorInitTest(unittest.TestCase):
             ):
                 pipeline._get_predictor(settings)
 
+    def test_get_predictor_does_not_reuse_predictor_instance(self) -> None:
+        builds: list[object] = []
+        fake_builder = ModuleType("sam3.model_builder")
+
+        def build_sam3_video_predictor(**kwargs):
+            predictor = {"build_num": len(builds) + 1, "kwargs": kwargs}
+            builds.append(predictor)
+            return predictor
+
+        fake_builder.build_sam3_video_predictor = build_sam3_video_predictor
+        settings = Settings(
+            runs_dir=Path("/tmp/sam3-video-tests"),
+            sam3_device="cuda",
+            sam3_checkpoint_path=None,
+            sam3_load_from_hf=True,
+            sam3_compile=False,
+            sam3_apply_temporal_disambiguation=True,
+        )
+
+        with patch("torch.cuda.is_available", return_value=True):
+            with patch.dict(sys.modules, {"sam3.model_builder": fake_builder}, clear=False):
+                first = pipeline._get_predictor(settings)
+                second = pipeline._get_predictor(settings)
+
+        self.assertEqual(len(builds), 2)
+        self.assertIsNot(first, second)
+
 
 class ClickSessionPrepTest(unittest.TestCase):
     def test_prime_click_prompt_session_seeds_empty_cache_for_all_frames(self) -> None:

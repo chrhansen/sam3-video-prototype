@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import json
 import logging
 import time
@@ -70,17 +71,7 @@ def _resolve_predictor_checkpoint_path(settings: Settings) -> str | None:
 def _get_predictor(settings: Settings):
     _require_cuda(settings)
     checkpoint_path = _resolve_predictor_checkpoint_path(settings)
-    checkpoint_key = str(settings.sam3_checkpoint_path or "")
-    key = (
-        checkpoint_key,
-        settings.sam3_load_from_hf,
-        settings.sam3_compile,
-    )
     with _predictor_lock:
-        cached = _predictor_cache.get(key)
-        if cached is not None:
-            return cached
-
         try:
             from sam3.model_builder import build_sam3_video_predictor
         except Exception as exc:  # noqa: BLE001
@@ -93,7 +84,6 @@ def _get_predictor(settings: Settings):
             apply_temporal_disambiguation=settings.sam3_apply_temporal_disambiguation,
             compile=settings.sam3_compile,
         )
-        _predictor_cache[key] = predictor
         return predictor
 
 
@@ -231,6 +221,12 @@ def _mark_session_frame_has_outputs(predictor: object, session_id: str, frame_id
         previous_stages_out[frame_idx] = "_THIS_FRAME_HAS_OUTPUTS_"
 
 
+def _release_predictor_resources() -> None:
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def run_sam3_video_track(
     *,
     settings: Settings,
@@ -298,6 +294,7 @@ def run_sam3_video_track(
     )
 
     session_id: str | None = None
+    predictor = None
     outputs_per_frame: dict[int, dict[str, object]] = {}
 
     try:
@@ -486,6 +483,8 @@ def run_sam3_video_track(
                 predictor.handle_request({"type": "close_session", "session_id": session_id})
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[sam3-video][%s] close_session failed: %s", job_ref, exc)
+        predictor = None
+        _release_predictor_resources()
 
     return video_info, RunArtifacts(
         frame0_path=frame0_path,
