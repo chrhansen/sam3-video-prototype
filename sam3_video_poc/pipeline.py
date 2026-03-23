@@ -76,7 +76,7 @@ def _get_predictor(settings: Settings):
             from sam3.model_builder import build_sam3_video_predictor
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(
-                "SAM3 import failed. Install official facebookresearch/sam3 package first."
+                f"SAM3 import failed: {type(exc).__name__}: {exc}"
             ) from exc
 
         predictor = build_sam3_video_predictor(

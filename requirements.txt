@@ -7,4 +7,6 @@ opencv-python-headless>=4.10.0
 Pillow>=10.4.0
 pycocotools>=2.0.8
 psutil>=5.9.0
+einops>=0.8.0
+hydra-core>=1.3.2
 https://github.com/facebookresearch/sam3/archive/86ed77094094e5cabb16b0414ec60c5ba9ce0a0f.tar.gz
