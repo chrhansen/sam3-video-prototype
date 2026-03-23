@@ -9,6 +9,10 @@ cd "$APP_DIR"
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip "setuptools<82" wheel
+if ! python -c "import torchvision" >/dev/null 2>&1; then
+  python -m pip install --index-url "${TORCHVISION_INDEX_URL:-https://download.pytorch.org/whl/cu126}" \
+    "torchvision==${TORCHVISION_VERSION:-0.22.0}"
+fi
 python -m pip install -r requirements.txt
 
 mkdir -p "${HF_HOME:-/workspace/.cache/huggingface}"

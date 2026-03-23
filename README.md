@@ -33,6 +33,7 @@ Dependency pinned to official repo commit:
 
 - Click mode: single target, object id `1`.
 - Text mode: SAM3 Video may detect multiple matches. This prototype keeps the top-scoring match and renders only that target.
+- Each upload job uses a fresh predictor instance. Repeated uploads on the same pod are supported.
 - Outputs stored in `runs/<job_id>/`.
 
 ## Local quickstart
@@ -89,7 +90,7 @@ docker run --rm --gpus all -p 8000:8000 \
   sam3-video:local
 ```
 
-Preferred GHCR image:
+Published GHCR image:
 
 ```bash
 ghcr.io/chrhansen/sam3-video-prototype:latest
@@ -97,17 +98,10 @@ ghcr.io/chrhansen/sam3-video-prototype:latest
 
 ## RunPod pod helper
 
-Create pod from already-pushed image:
+Create pod from the published GHCR image:
 
 ```bash
 python scripts/runpod_pod.py create --wait
-```
-
-Override image if you want a plain base pod:
-
-```bash
-python scripts/runpod_pod.py create \
-  --image runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04
 ```
 
 Check pod:
@@ -138,11 +132,27 @@ Required runtime secrets:
 
 ## Bootstrap fallback
 
-If you copy this repo into a live pod workspace instead of using the image:
+If GHCR image pull stalls on a RunPod host, use a stock GPU image and bootstrap from a repo checkout. This is the fallback that produced the current working RunPod pod.
+
+Recommended stock image:
 
 ```bash
+pytorch/pytorch:2.7.0-cuda12.6-cudnn9-devel
+```
+
+Inside the pod:
+
+```bash
+git clone https://github.com/chrhansen/sam3-video-prototype.git /workspace/sam3-video
+cd /workspace/sam3-video
 bash scripts/bootstrap_runpod.sh /workspace/sam3-video
 ```
+
+Notes:
+
+- `scripts/bootstrap_runpod.sh` installs app deps plus `torchvision==0.22.0` if the base image does not already provide it.
+- The script assumes the base image already ships with a compatible CUDA `torch` build.
+- If you need a fixed deploy, `git checkout <sha>` before running the bootstrap script.
 
 ## GitHub Actions / GHCR
 
@@ -170,4 +180,5 @@ Published tags:
 - Official SAM3 Video predictor loads large weights. First prompt on a cold pod will take time.
 - `SAM3_COMPILE=1` exists but left off by default. Compile cost is not prototype-friendly.
 - If RunPod image pull or gated checkpoint download fails, verify `HF_TOKEN` scope/access first.
+- Some RunPod hosts have stalled on the GHCR app image; the stock-image bootstrap flow above is the operational fallback.
 - If `SAM3_LOAD_FROM_HF=0`, also set `SAM3_CHECKPOINT_PATH` to a local checkpoint file.
